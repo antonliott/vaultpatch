@@ -6,67 +6,62 @@ import (
 	"strings"
 )
 
-// SecretMap represents a flat map of secret key-value pairs.
-type SecretMap map[string]string
-
-// DiffType indicates the kind of change for a secret key.
-type DiffType string
+// ChangeType represents the kind of difference detected.
+type ChangeType string
 
 const (
-	DiffAdded   DiffType = "added"
-	DiffRemoved DiffType = "removed"
-	DiffChanged DiffType = "changed"
+	Added   ChangeType = "added"
+	Removed ChangeType = "removed"
+	Changed ChangeType = "changed"
 )
 
-// DiffEntry represents a single difference between two SecretMaps.
-type DiffEntry struct {
+// Change describes a single key-level difference between two secret maps.
+type Change struct {
+	Type     ChangeType
 	Key      string
-	Type     DiffType
 	OldValue string
 	NewValue string
 }
 
-// Compare computes the diff between a source and target SecretMap.
-// Returns a slice of DiffEntry describing each change.
-func Compare(source, target SecretMap) []DiffEntry {
-	var entries []DiffEntry
+// Compare returns the list of changes between src and dst secret maps.
+func Compare(src, dst map[string]string) []Change {
+	var changes []Change
 
-	for k, tv := range target {
-		if sv, ok := source[k]; !ok {
-			entries = append(entries, DiffEntry{Key: k, Type: DiffAdded, NewValue: tv})
-		} else if sv != tv {
-			entries = append(entries, DiffEntry{Key: k, Type: DiffChanged, OldValue: sv, NewValue: tv})
+	for k, dv := range dst {
+		if sv, ok := src[k]; !ok {
+			changes = append(changes, Change{Type: Added, Key: k, NewValue: dv})
+		} else if sv != dv {
+			changes = append(changes, Change{Type: Changed, Key: k, OldValue: sv, NewValue: dv})
 		}
 	}
 
-	for k, sv := range source {
-		if _, ok := target[k]; !ok {
-			entries = append(entries, DiffEntry{Key: k, Type: DiffRemoved, OldValue: sv})
+	for k, sv := range src {
+		if _, ok := dst[k]; !ok {
+			changes = append(changes, Change{Type: Removed, Key: k, OldValue: sv})
 		}
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Key < entries[j].Key
+	sort.Slice(changes, func(i, j int) bool {
+		return changes[i].Key < changes[j].Key
 	})
 
-	return entries
+	return changes
 }
 
-// Format renders a human-readable diff output.
-func Format(entries []DiffEntry) string {
-	if len(entries) == 0 {
-		return "No differences found."
+// Format returns a human-readable unified-diff-style string for the changes.
+func Format(changes []Change) string {
+	if len(changes) == 0 {
+		return "no changes"
 	}
-
 	var sb strings.Builder
-	for _, e := range entries {
-		switch e.Type {
-		case DiffAdded:
-			sb.WriteString(fmt.Sprintf("+ %s = %q\n", e.Key, e.NewValue))
-		case DiffRemoved:
-			sb.WriteString(fmt.Sprintf("- %s = %q\n", e.Key, e.OldValue))
-		case DiffChanged:
-			sb.WriteString(fmt.Sprintf("~ %s: %q -> %q\n", e.Key, e.OldValue, e.NewValue))
+	for _, c := range changes {
+		switch c.Type {
+		case Added:
+			fmt.Fprintf(&sb, "+ %s = %s\n", c.Key, c.NewValue)
+		case Removed:
+			fmt.Fprintf(&sb, "- %s = %s\n", c.Key, c.OldValue)
+		case Changed:
+			fmt.Fprintf(&sb, "~ %s: %s -> %s\n", c.Key, c.OldValue, c.NewValue)
 		}
 	}
 	return sb.String()
