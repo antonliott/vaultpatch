@@ -80,6 +80,9 @@ var diffCmd = &cobra.Command{
 	Short: "Show differences between two Vault secret paths",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateOutputFormat(outputFormat); err != nil {
+			return err
+		}
 		// TODO: implement in internal/diff package
 		fmt.Fprintf(cmd.OutOrStdout(), "diff %s -> %s (not yet implemented)\n", args[0], args[1])
 		return nil
@@ -92,6 +95,9 @@ var applyCmd = &cobra.Command{
 	Short: "Apply a secrets patch file to Vault",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateOutputFormat(outputFormat); err != nil {
+			return err
+		}
 		// TODO: implement in internal/patch package
 		fmt.Fprintf(cmd.OutOrStdout(), "apply %s (not yet implemented)\n", args[0])
 		return nil
@@ -105,4 +111,15 @@ func getEnvOrDefault(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+// validateOutputFormat checks that the given format is one of the supported
+// output formats: text, json, or yaml. Returns an error if the format is invalid.
+func validateOutputFormat(format string) error {
+	switch format {
+	case "text", "json", "yaml":
+		return nil
+	default:
+		return fmt.Errorf("unsupported output format %q: must be one of text, json, yaml", format)
+	}
 }
