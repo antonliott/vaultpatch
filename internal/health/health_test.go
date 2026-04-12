@@ -1,70 +1,82 @@
-package health_test
+package health
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
-	"time"
 
-	"github.com/your-org/vaultpatch/internal/health"
+	vaultapi "github.com/hashicorp/vault/api"
 )
 
 func TestStatus_String_Unsealed(t *testing.T) {
-	s := health.Status{
-		Address:     "http://127.0.0.1:8200",
-		Namespace:   "ns1",
-		Initialized: true,
-		Sealed:      false,
-		Version:     "1.15.0",
-		CheckedAt:   time.Now(),
-	}
-	got := s.String()
-	if got == "" {
-		t.Fatal("expected non-empty status string")
-	}
-	for _, want := range []string{"1.15.0", "http://127.0.0.1:8200", "ns1", "initialized", "unsealed"} {
-		if !contains(got, want) {
-			t.Errorf("String() = %q, want it to contain %q", got, want)
-		}
+	if got := StatusUnsealed.String(); got != "unsealed" {
+		t.Errorf("expected unsealed, got %s", got)
 	}
 }
 
 func TestStatus_String_Sealed(t *testing.T) {
-	s := health.Status{
-		Address:     "http://vault:8200",
-		Namespace:   "",
-		Initialized: true,
-		Sealed:      true,
-		Version:     "1.14.2",
-		CheckedAt:   time.Now(),
-	}
-	got := s.String()
-	if !contains(got, "sealed") {
-		t.Errorf("String() = %q, want it to contain \"sealed\"", got)
+	if got := StatusSealed.String(); got != "sealed" {
+		t.Errorf("expected sealed, got %s", got)
 	}
 }
 
 func TestStatus_String_Uninitialized(t *testing.T) {
-	s := health.Status{
-		Address:     "http://vault:8200",
-		Namespace:   "dev",
-		Initialized: false,
-		Sealed:      true,
-		Version:     "1.13.0",
-		CheckedAt:   time.Now(),
-	}
-	got := s.String()
-	if !contains(got, "uninitialized") {
-		t.Errorf("String() = %q, want it to contain \"uninitialized\"", got)
+	if got := StatusUninitialized.String(); got != "uninitialized" {
+		t.Errorf("expected uninitialized, got %s", got)
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(func() bool {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
-			return false
-		})())
+func newTestServer(t *testing.T, body interface{}, code int) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(body)
+	}))
+}
+
+func newVaultClient(t *testing.T, addr string) *vaultapi.Client {
+	t.Helper()
+	cfg := vaultapi.DefaultConfig()
+	cfg.Address = addr
+	client, err := vaultapi.NewClient(cfg)
+	if err != nil {
+		t.Fatalf("failed to create vault client: %v", err)
+	}
+	return client
+}
+
+func contains(t *testing.T, s, substr string) {
+	t.Helper()
+	if !strings.Contains(s, substr) {
+		t.Errorf("expected %q to contain %q", s, substr)
+	}
+}
+
+func TestCheck_Unsealed(t *testing.T) {
+	payload := map[string]interface{}{
+		"initialized":  true,
+		"sealed":       false,
+		"version":      "1.15.0",
+		"cluster_name": "vault-cluster",
+	}
+	srv := newTestServer(t, payload, http.StatusOK)
+	defer srv.Close()
+
+	checker := NewChecker(newVaultClient(t, srv.URL))
+	status, err := checker.Check(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status.State != StatusUnsealed {
+		t.Errorf("expected unsealed, got %s", status.State)
+	}
+	contains(t, status.Version, "1.15.0")
+	contains(t, status.ClusterName, "vault-cluster")
+	if status.CheckedAt.IsZero() {
+		t.Error("expected non-zero CheckedAt")
+	}
 }
