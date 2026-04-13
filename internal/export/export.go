@@ -51,6 +51,15 @@ func (e *Exporter) Write(secrets map[string]string) error {
 	}
 }
 
+// SupportedFormats returns a slice of all supported export format strings.
+func SupportedFormats() []string {
+	return []string{
+		string(FormatJSON),
+		string(FormatYAML),
+		string(FormatDotenv),
+	}
+}
+
 func writeJSON(w io.Writer, secrets map[string]string) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
