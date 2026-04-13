@@ -73,3 +73,20 @@ func TestCollect_ReadError(t *testing.T) {
 		t.Error("expected error from read, got nil")
 	}
 }
+
+func TestCollect_EmptyList(t *testing.T) {
+	reader := &mockReader{
+		listFn: func(_ context.Context, _ string) ([]string, error) {
+			return []string{}, nil
+		},
+		readFn: nil,
+	}
+	c := snapshot.NewCollector("dev", reader)
+	snap, err := c.Collect(context.Background(), "secret")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(snap.Secrets) != 0 {
+		t.Errorf("expected empty secrets map, got %d entries", len(snap.Secrets))
+	}
+}
