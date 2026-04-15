@@ -69,6 +69,10 @@ func TestApply_Success(t *testing.T) {
 	if len(res.Reverted) != 1 {
 		t.Errorf("expected 1 reverted, got %d", len(res.Reverted))
 	}
+	// Verify the store was actually updated with the snapshot value.
+	if mw.store["secret/a"]["k"] != "snap" {
+		t.Errorf("expected store value \"snap\", got %v", mw.store["secret/a"]["k"])
+	}
 }
 
 func TestApply_SkipsUnchanged(t *testing.T) {
@@ -90,5 +94,21 @@ func TestApply_ReadError(t *testing.T) {
 	res, _ := r.Apply(context.Background(), snap)
 	if !res.HasErrors() {
 		t.Error("expected errors")
+	}
+}
+
+func TestApply_WriteError(t *testing.T) {
+	mw := &mockWriter{
+		store:    map[string]map[string]interface{}{"secret/a": {"k": "old"}},
+		writeErr: errors.New("vault read-only"),
+	}
+	r := NewRollbacker(mw, false)
+	snap := makeSnap(map[string]map[string]interface{}{"secret/a": {"k": "snap"}})
+	res, _ := r.Apply(context.Background(), snap)
+	if !res.HasErrors() {
+		t.Error("expected errors when write fails")
+	}
+	if len(res.Reverted) != 0 {
+		t.Errorf("expected 0 reverted on write error, got %d", len(res.Reverted))
 	}
 }
