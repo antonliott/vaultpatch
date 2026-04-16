@@ -46,6 +46,17 @@ func NewSearcher(r Reader, mount, keyPattern, valuePattern string) (*Searcher, e
 	return &Searcher{reader: r, mount: mount, keyRe: kre, valueRe: vre}, nil
 }
 
+// matches reports whether the key-value pair satisfies the searcher's filters.
+func (s *Searcher) matches(k, v string) bool {
+	if s.keyRe != nil && !s.keyRe.MatchString(k) {
+		return false
+	}
+	if s.valueRe != nil && !s.valueRe.MatchString(v) {
+		return false
+	}
+	return true
+}
+
 // Run walks all paths under mount and returns matches.
 func (s *Searcher) Run(ctx context.Context) ([]Match, error) {
 	paths, err := s.reader.List(ctx, s.mount)
@@ -59,13 +70,9 @@ func (s *Searcher) Run(ctx context.Context) ([]Match, error) {
 			continue
 		}
 		for k, v := range secrets {
-			if s.keyRe != nil && !s.keyRe.MatchString(k) {
-				continue
+			if s.matches(k, v) {
+				results = append(results, Match{Path: p, Key: k, Value: v})
 			}
-			if s.valueRe != nil && !s.valueRe.MatchString(v) {
-				continue
-			}
-			results = append(results, Match{Path: p, Key: k, Value: v})
 		}
 	}
 	return results, nil
