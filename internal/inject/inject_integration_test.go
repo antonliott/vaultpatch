@@ -29,11 +29,11 @@ func TestInject_MultiplePathsSingleRead(t *testing.T) {
 	}
 
 	input := map[string]string{
-		"API_KEY":  "vault://secret/app#api_key",
-		"REGION":   "vault://secret/app#region",
-		"DB_HOST":  "vault://secret/db#host",
-		"DB_PORT":  "vault://secret/db#port",
-		"STATIC":   "plainvalue",
+		"API_KEY": "vault://secret/app#api_key",
+		"REGION":  "vault://secret/app#region",
+		"DB_HOST": "vault://secret/db#host",
+		"DB_PORT": "vault://secret/db#port",
+		"STATIC":  "plainvalue",
 	}
 
 	inj := inject.New(store, inject.Options{})
@@ -68,6 +68,22 @@ func TestInject_CustomPrefix(t *testing.T) {
 		t.Fatalf("unexpected errors: %v", res.Errors)
 	}
 	assertEq(t, out["SVC_TOKEN"], "tok-xyz")
+}
+
+// TestInject_MissingKey verifies that referencing a non-existent key within a
+// valid Vault path is reported as an error and does not overwrite the original value.
+func TestInject_MissingKey(t *testing.T) {
+	store := &staticStore{
+		paths: map[string]map[string]string{
+			"secret/app": {"api_key": "abc123"},
+		},
+	}
+	input := map[string]string{"MISSING": "vault://secret/app#nonexistent"}
+	inj := inject.New(store, inject.Options{})
+	_, res := inj.Apply(context.Background(), input)
+	if !res.HasErrors() {
+		t.Fatal("expected an error for missing key, got none")
+	}
 }
 
 func assertEq(t *testing.T, got, want string) {
